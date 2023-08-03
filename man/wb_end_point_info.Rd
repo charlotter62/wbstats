@@ -9,6 +9,8 @@
 \alias{wb_income_levels}
 \alias{wb_lending_types}
 \alias{wb_languages}
+\alias{wb_series}
+\alias{wb_counterparts}
 \title{World Bank Information End Points}
 \usage{
 wb_countries(lang)
@@ -24,6 +26,10 @@ wb_income_levels(lang)
 wb_lending_types(lang)
 
 wb_languages()
+
+wb_series()
+
+wb_counterparts()
 }
 \arguments{
 \item{lang}{Language in which to return the results. If \code{lang} is unspecified,

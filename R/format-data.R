@@ -177,3 +177,103 @@ format_wb_country <- function(x, cache) {
   paste0(cn_params, collapse = ";")
 }
 
+#' @noRd
+format_wb_counterpart <- function(x, cache) {
+
+  x_lower <- tolower(x)
+  cpt_params <- c()
+
+  if (missing(cache)) cache <- wbstats::wb_cachelist
+  cache_cpt <- cache$counterparts
+
+  if(any(x_lower %in% c("mdbs"))){
+    cpt_params <- c(cpt_params, unique_na(cache_cpt$id[cache_cpt$mdb=="Y"])) #overwrites blank to mdbs list
+  }
+  if(any(x_lower %in% c("bilateral"))){
+    cpt_params <- c(cpt_params, unique_na(cache_cpt$id[cache_cpt$bilat=="Y"])) #overwrites list to bilateral list
+  }
+
+  cpt_check <- as.matrix(cache_cpt[ , c("id", "value")])
+  cpt_check <- rbind(cpt_check ,c("MDB", "mdbs"), c("BIL","bilateral")) #include the special cases so they are not flagged as error
+  # don't forget everything is lowercase now
+  cpt_check <- tolower(cpt_check)
+
+  good_cpt_index <- x_lower %in% cpt_check
+  good_cpt <- x_lower[good_cpt_index]
+
+  if (length(good_cpt) == 0)
+    stop("No valid values for the counterpart-area parameter were found.
+           Please check the counterpart-area argument description in wbstats::wb_data() for valid input values.")
+
+  # use x instead of x_lower to KeEp UsEr DeFiNeD cAsInG
+  bad_cpt <- x[!good_cpt_index]
+  #bad_cpt <- bad_cpt[!any(x_lower %in% c("mdbs", "bilateral"))] #should not throw error for special cases
+
+  if (length(bad_cpt) > 0)
+    warning(paste0("The following counterpart-area values are not valid and are being excluded from the request: ",
+                   paste(bad_cpt, collapse = ",")))
+
+  # the API only accepts IDs and not names, so if a counterpart-area is listed in x
+  # find its id code. This lets the user pass values like "World Bank-IBRD" or "Austria"
+  good_cpt_id_index <- lapply(1:ncol(cpt_check), function(i) {
+    which(cpt_check[1:nrow(cpt_check), i] %in% x_lower)
+  })
+
+  good_cpt_id_index <- unique(unlist(good_cpt_id_index))
+  cpt_params <- c(cpt_params, unique_na(cpt_check[good_cpt_id_index, 1]))
+
+  paste0(cpt_params, collapse = ";")
+
+}
+
+#' @noRd
+guess_wb_source <- function(ind, cache){
+  if (missing(cache)) cache <- wbstats::wb_cachelist
+  source <- sapply(ind, FUN=function(x){
+    src <- unique(cache$series$source_id[cache$series$id==x])[1] #pick the first source
+    src_name <- cache$sources$source[cache$sources$source_id==src] #get source names
+    print(paste0("Source: ", src_name, " used by default for indicator: ", x))
+    return(src)
+  })
+  return(source)
+}
+
+#' @noRd
+format_wb_source <- function(src, ind, cache){
+
+  if (missing(cache)) cache <- wbstats::wb_cachelist
+
+  #if sources not named by indicator, add names
+  if(is.null(names(src))){
+    if(length(src)==length(ind)){
+      names(src) <- ind
+    }
+  }
+
+  sapply(ind, FUN=function(i){
+    s <- src[i]
+
+    #If an indicator is missing a source
+    if(!(i %in% names(src))){
+      return(guess_wb_source(i, cache))
+    }else{ #The indicator has a source input
+      #If the source for this indicator is not in the sources list
+      if(!(s %in% cache$series$source_id)){
+        writeLines(sprintf("Invalid source provided: %s. See wb_cachelist$sources for valid source ids.\n", s))
+        return(guess_wb_source(i, cache))
+      }else{
+        #If the source exists but does not have that indicator
+        inds_by_src <- cache$series$id[cache$series$source_id==s]
+        if(!(i %in% inds_by_src)){
+          writeLines(sprintf("Source: %s does not have series %s. See wb_cachelist$series for valid source ids.", s, i))
+          return(guess_wb_source(i, cache))
+        }else{
+          #If the source exists and has the indicator (input is correct!)
+          return(s)
+        }
+      }
+    }
+
+  })
+
+}

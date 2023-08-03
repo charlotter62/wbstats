@@ -119,6 +119,82 @@ wb_indicators <- function(lang, include_archive = FALSE) {
   df
 }
 
+#------Get list of series available for a given source (CR)-----------#
+wb_series_by_source <- function(source, per_page=5000){
+#wb_series_by_source <- function(source, lang, per_page=5000){
+  #Given the source id, will return all the series available
+  #library(httr)
+  #library(jsonlite)
+
+  lang <- wb_default_lang() #lang <- if_missing(lang, wb_default_lang(), lang)
+  link <- paste0("https://api.worldbank.org/v2/",lang,"/sources/",source,"/series?per_page=", per_page, "&format=json")
+  customRequest <- httr::GET(url = link)
+  customResponse <- content(customRequest, as = "text", encoding = "UTF-8")
+  customJSON <- jsonlite::fromJSON(customResponse, flatten = TRUE)
+  series <- cbind(source_id=source, data.frame(customJSON[["source"]][["concept"]][[1]][["variable"]][[1]]))
+  return(series)
+}
+
+
+#--------Get list of series available for all sources (CR)-----------#
+#' Download World Bank series information
+#' @rdname wb_end_point_info
+#' @export
+wb_series <- function(){
+
+  #Will return the series available from all sources
+  sources_df <- wb_sources()
+  source_ids <- as.list(sources_df$source_id)
+  series <- lapply(source_ids, wb_series_by_source)
+
+  #library(data.table)
+  series <- rbindlist(series)
+  series <- merge(data.frame(sources_df[,c("source","source_id")]), series, by="source_id",all=TRUE)
+
+  return(series)
+
+}
+
+#------Get list of counterpart areas available (CR)--------#
+wb_counterparts_by_source <- function(source, per_page=1000){
+  lang <- "en"#wb_default_lang() #lang <- if_missing(lang, wb_default_lang(), lang)
+  link <- paste0("https://api.worldbank.org/v2/",lang,"/sources/",source,"/counterpart-area?per_page=", per_page, "&format=json")
+  counterpart <- NULL
+
+  #return_json <- fetch_wb_url_content(link)
+  try({
+    customRequest <- httr::GET(url = link);
+    customResponse <- content(customRequest, as = "text", encoding = "UTF-8");
+    customJSON <- jsonlite::fromJSON(customResponse, flatten = TRUE);
+    counterpart <- cbind(source_id=source, data.frame(customJSON[["source"]][["concept"]][[1]][["variable"]][[1]]))},
+    silent=TRUE)
+
+  return(counterpart)
+}
+
+#' Download World Bank counterpart information
+#' @rdname wb_end_point_info
+#' @export
+wb_counterparts <- function(){
+  sources_df <- wb_sources()
+  source_ids <- as.list(sources_df$source_id)
+  counterparts <- lapply(source_ids, try(wb_counterparts_by_source, silent=TRUE))
+
+  #library(data.table)
+  counterparts <- rbindlist(counterparts)
+  counterparts <- merge(data.frame(sources_df[,c("source","source_id")]), counterparts, by="source_id",all=TRUE)
+  counterparts <- counterparts[!is.na(counterparts$value),]
+
+  mdbs <- data.frame(id=c("894","899","901","903","904","905","906","909","910","913","915", "919","920", "926", "953", "976", "990"), mdb="Y")
+  counterparts <- merge(counterparts, mdbs, by="id", all.x=TRUE)
+
+  counterparts$bilat <- ifelse(is.na(countrycode(counterparts$value, "country.name","iso3c")),NA,"Y")
+  counterparts$bilat <- ifelse(counterparts$value %in% c("Turkiye","Kosovo","Yugoslavia", "Czechoslovakia", "Neth. Antilles", "German Dem. Rep.", "Pacific Is. (Us)"), "Y", counterparts$bilat)
+
+  return(counterparts[order(counterparts$source_id),])
+}
+
+
 #' Download an updated list of country, indicator, and source information
 #'
 #' Download an updated list of information regarding countries, indicators,
@@ -154,7 +230,9 @@ wb_cache <- function(lang) {
   lang <- if_missing(lang, wb_default_lang(), lang)
   list(
     countries     = wb_countries(lang),
+    counterparts  = wb_counterparts(), #should fix later to incorporate multiple languages
     indicators    = wb_indicators(lang),
+    series        = wb_series(), #should fix later to incorporate multiple languages
     sources       = wb_sources(lang),
     topics        = wb_topics(lang),
     regions       = wb_regions(lang),

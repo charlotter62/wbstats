@@ -28,7 +28,9 @@ Imports:
     stringr,
     tibble,
     tidyr,
-    magrittr
+    magrittr,
+    data.table,
+    countrycode
 Suggests:
     ggplot2,
     knitr,
@@ -38,4 +40,4 @@ VignetteBuilder:
     knitr
 Encoding: UTF-8
 LazyData: TRUE
-RoxygenNote: 7.0.1
+RoxygenNote: 7.2.3

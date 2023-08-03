@@ -21,3 +21,5 @@ save(
   version = 2 # version 2 prevents a dependency on R >= 3.5.0
     )
 
+#Updated on 7/21/2023 to include wb_series() CR
+
